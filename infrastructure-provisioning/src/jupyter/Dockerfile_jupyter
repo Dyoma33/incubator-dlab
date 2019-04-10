@@ -1,0 +1,72 @@
+# *****************************************************************************
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+# ******************************************************************************
+
+FROM ubuntu:18.04
+
+ARG NB_USER="dlab-user"
+ARG CONF_FILE="/home/dlab-user/.local/share/jupyter/jupyter_notebook_config.py"
+ARG ID_GENERATOR="date +%s | sha256sum | base64 | head -c 32 ; echo"
+
+RUN useradd -u 1001 $NB_USER
+
+USER root
+
+#Installing Python3 and pip
+RUN apt-get update \
+  && apt-get install -y python3-pip python3-dev \
+  && cd /usr/local/bin \
+  && ln -s /usr/bin/python3 python \
+  && pip3 install --upgrade pip
+
+#Installing Jupyter
+RUN pip install notebook==5.7.4 --no-cache-dir \
+  && pip install jupyter --no-cache-dir
+RUN rm -rf $CONF_FILE
+RUN jupyter notebook --generate-config --config $CONF_FILE
+RUN mkdir -p /home/$NB_USER/.jupyter/custom/
+RUN echo "#notebook-container { width: auto; }" > /home/$NB_USER/.jupyter/custom/custom.css
+RUN echo "c.NotebookApp.ip = \'0.0.0.0\'" >> $CONF_FILE
+RUN echo "c.NotebookApp.base_url = \'/{exploratory_name}/\'" >> $CONF_FILE  ##################
+RUN echo c.NotebookApp.open_browser = False >> $CONF_FILE
+RUN echo "c.NotebookApp.cookie_secret = $($ID_GENERATOR)" >> $CONF_FILE
+RUN cat $CONF_FILE | grep NotebookApp.cookie_secret
+RUN ''echo "c.NotebookApp.token = u''" >> $CONF_FILE''
+RUN echo 'c.NotebookApp.cookie_secret = b"{random_ID}"' >> $CONF_FILE ##################
+RUN echo 'c.KernelSpecManager.ensure_native_kernel = False' >> $CONF_FILE
+COPY /home/dlab-user/jupyter/jupyter-notebook.service /tmp/jupyter-notebook.service  ##########################
+RUN chmod 644 /tmp/jupyter-notebook.service
+RUN sed -i 's|CONF_PATH|$CONF_FILE|' /tmp/jupyter-notebook.service
+RUN sed -i 's|OS_USR|$NB_USER|' /tmp/jupyter-notebook.service
+RUN cp /tmp/jupyter-notebook.service /etc/systemd/system/jupyter-notebook.service
+RUN chown -R $NB_USER:$NB_USER /home/$NB_USER/.local
+RUN mkdir -p /mnt/var
+RUN chown $NB_USER:$NB_USER /mnt/var
+RUN jupyter-kernelspec remove -f python3 || echo "Such kernel doesnt exists"
+RUN systemctl daemon-reload
+RUN systemctl enable jupyter-notebook
+RUN systemctl start jupyter-notebook
+RUN touch /home/$NB_USER/.ensure_dir/jupyter_ensured
+
+#Installing Sparkmagic
+RUN pip install ipywidgets
+RUN jupyter nbextension enable --py --sys-prefix widgetsnbextension
+RUN pip install sparkmagic
+RUN pip show sparkmagic
