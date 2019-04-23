@@ -24,17 +24,129 @@ FROM ubuntu:18.04
 ARG NB_USER="dlab-user"
 ARG CONF_FILE="/home/dlab-user/.local/share/jupyter/jupyter_notebook_config.py"
 ARG ID_GENERATOR="date +%s | sha256sum | base64 | head -c 32 ; echo"
+ENV PATH /usr/local/bin:$PATH
+ENV LANG C.UTF-8
+#ENV GPG_KEY 97FC712E4C024BBEA48A61ED3A5CA953F73C700D
+#ENV PYTHON_VERSION 3.5.0
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN useradd -u 1001 $NB_USER
+RUN apt-get update && apt-get install -y --no-install-recommends \
+                tk-dev wget gnupg dirmngr build-essential openssl \
+                libreadline-gplv2-dev libncursesw5-dev libssl-dev \
+                libsqlite3-dev libgdbm-dev libc6-dev libbz2-dev \
+                python python-pip default-jre default-jdk \
+&& rm -rf /var/lib/apt/lists/*
+
+RUN useradd -u 1001 -ms /bin/bash $NB_USER
+
+
+#RUN set -ex \
+#       \
+#       && wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz" --no-check-certificate \
+#       && wget -O python.tar.xz.asc "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz.asc" --no-check-certificate \
+#       && export GNUPGHOME="$(mktemp -d)" \
+#       && gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys "$GPG_KEY" \
+#       && gpg --batch --verify python.tar.xz.asc python.tar.xz \
+#       && { command -v gpgconf > /dev/null && gpgconf --kill all || :; } \
+#       && rm -rf "$GNUPGHOME" python.tar.xz.asc \
+#       && mkdir -p /usr/src/python \
+#       && tar -xJC /usr/src/python --strip-components=1 -f python.tar.xz \
+#       && rm python.tar.xz \
+#       \
+#       && cd /usr/src/python \
+#       && gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
+#       && ./configure \
+#               --build="$gnuArch" \
+#               --enable-loadable-sqlite-extensions \
+#               --enable-shared \
+#               --with-system-expat \
+#               --with-system-ffi \
+#               --without-ensurepip \
+#       && make -j "$(nproc)" \
+#       && make install \
+#       && ldconfig \
+#       \
+#       && find /usr/local -depth \
+#               \( \
+#                       \( -type d -a \( -name test -o -name tests \) \) \
+#                       -o \
+#                       \( -type f -a \( -name '*.pyc' -o -name '*.pyo' \) \) \
+#               \) -exec rm -rf '{}' + \
+#       && rm -rf /usr/src/python \
+#       \
+#       && python3 --version
+
+# make some useful symlinks that are expected to exist
+#RUN cd /usr/local/bin \
+#        && ln -s idle3 idle \
+#        && ln -s pydoc pydoc \
+#        && ln -s python python \
+#&& ln -s python3-config python-config
+
+#ENV PYTHON_PIP_VERSION 9.0.3
+#
+#RUN set -ex; \
+#       \
+#       wget -O get-pip.py 'https://bootstrap.pypa.io/get-pip.py' --no-check-certificate; \
+#       \
+#       python get-pip.py \
+#               --proxy="http://ec2-52-35-73-47.us-west-2.compute.amazonaws.com:3128" \
+#               --disable-pip-version-check \
+#               --no-cache-dir \
+#               "pip==$PYTHON_PIP_VERSION" \
+#       ; \
+#       pip --version; \
+#       \
+#       find /usr/local -depth \
+#               \( \
+#                       \( -type d -a \( -name test -o -name tests \) \) \
+#                       -o \
+#                       \( -type f -a \( -name '*.pyc' -o -name '*.pyo' \) \) \
+#               \) -exec rm -rf '{}' +; \
+#       rm -f get-pip.py
+#
+
+
+USER $NB_USER
+RUN mkdir /home/$NB_USER/.ensure_dir
+
 
 USER root
 
+#RUN apt-get update \
+#  && apt-get install -y wget
+#RUN wget https://www.python.org/ftp/python/3.5.0/Python-3.5.0.tgz
+#RUN /bin/bash tar xzf Python-3.5.0.tgz; cd Python-3.5.0; ./configure --prefix=/usr/local; make altinstall
+
 #Installing Python3 and pip
-RUN apt-get update \
-  && apt-get install -y python3-pip python3-dev \
-  && cd /usr/local/bin \
-  && ln -s /usr/bin/python3 python \
-  && pip3 install --upgrade pip
+#RUN apt-get install -y python3-pip
+#RUN apt-get update \
+#  && apt-get install -y python3-pip python3-dev python3-setuptools \
+#  && cd /usr/local/bin \
+#  && ln -s /usr/bin/python3 python \
+#  && pip3 install --upgrade pip \
+RUN pip install --upgrade setuptools \
+  && pip install tornado==4.5.3 ipython ipython --no-cache-dir \
+  && pip install boto3 fabvenv fabric-virtualenv future --no-cache-dir \
+  && touch /home/$NB_USER/.ensure_dir/python3_libraries_ensured
+
+# Add Tini
+#ENV TINI_VERSION v0.18.0
+#ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+#RUN chmod +x /tini
+#ENTRYPOINT ["/tini", "--"]
+
+#Installing Java
+#RUN apt-get install -y default-jre \
+#  && apt-get install -y default-jdk \
+#  && touch /home/$NB_USER/.ensure_dir/jre_jdk_ensured
+
+
+#Installing Scala
+RUN wget http://www.scala-lang.org/files/archive/scala-2.12.8.deb -O /tmp/scala.deb \
+  && dpkg -i /tmp/scala.deb \
+  && touch /home/$NB_USER/.ensure_dir/scala_ensured
+
 
 #Installing Jupyter
 RUN pip install notebook==5.7.4 --no-cache-dir \
@@ -44,14 +156,12 @@ RUN jupyter notebook --generate-config --config $CONF_FILE
 RUN mkdir -p /home/$NB_USER/.jupyter/custom/
 RUN echo "#notebook-container { width: auto; }" > /home/$NB_USER/.jupyter/custom/custom.css
 RUN echo "c.NotebookApp.ip = \'0.0.0.0\'" >> $CONF_FILE
-RUN echo "c.NotebookApp.base_url = \'/{exploratory_name}/\'" >> $CONF_FILE  ##################
+RUN echo "c.NotebookApp.base_url = \'/jup/\'" >> $CONF_FILE  ##################
 RUN echo c.NotebookApp.open_browser = False >> $CONF_FILE
-RUN echo "c.NotebookApp.cookie_secret = $($ID_GENERATOR)" >> $CONF_FILE
-RUN cat $CONF_FILE | grep NotebookApp.cookie_secret
+RUN echo "c.NotebookApp.cookie_secret = NzMwZTI5MW" >> $CONF_FILE #################
 RUN ''echo "c.NotebookApp.token = u''" >> $CONF_FILE''
-RUN echo 'c.NotebookApp.cookie_secret = b"{random_ID}"' >> $CONF_FILE ##################
 RUN echo 'c.KernelSpecManager.ensure_native_kernel = False' >> $CONF_FILE
-COPY /home/dlab-user/jupyter/jupyter-notebook.service /tmp/jupyter-notebook.service  ##########################
+COPY jupyter-notebook.service /tmp/   #############
 RUN chmod 644 /tmp/jupyter-notebook.service
 RUN sed -i 's|CONF_PATH|$CONF_FILE|' /tmp/jupyter-notebook.service
 RUN sed -i 's|OS_USR|$NB_USER|' /tmp/jupyter-notebook.service
@@ -60,13 +170,29 @@ RUN chown -R $NB_USER:$NB_USER /home/$NB_USER/.local
 RUN mkdir -p /mnt/var
 RUN chown $NB_USER:$NB_USER /mnt/var
 RUN jupyter-kernelspec remove -f python3 || echo "Such kernel doesnt exists"
-RUN systemctl daemon-reload
-RUN systemctl enable jupyter-notebook
-RUN systemctl start jupyter-notebook
+#RUN mkdir /home/$NB_USER/.ensure_dir/
+#RUN touch /home/$NB_USER/.ensure_dir/jupyter_ensured
+
+#Installng local kernel
+RUN mkdir -p /home/$NB_USER/.local/share/jupyter/kernels/py3spark_local/
+COPY kernel.json /home/$NB_USER/.local/share/jupyter/kernels/py3spark_local/kernel.json
+COPY pyspark_kernel.json /home/$NB_USER/.local/share/jupyter/kernels/pyspark_local/kernel.json
+RUN chown -R 1001:1001 /home/$NB_USER/.local/share/jupyter/*
+
+EXPOSE 8888
+
+COPY jupyter_run.sh /jupyter_run.sh
+RUN chmod +x /jupyter_run.sh
+
+USER $NB_USER
 RUN touch /home/$NB_USER/.ensure_dir/jupyter_ensured
+#WORKDIR /home/$NB_USER/.jupyter/
+
+ENTRYPOINT ["/jupyter_run.sh", "-d"]
+
 
 #Installing Sparkmagic
-RUN pip install ipywidgets
-RUN jupyter nbextension enable --py --sys-prefix widgetsnbextension
-RUN pip install sparkmagic
-RUN pip show sparkmagic
+#RUN pip install ipywidgets
+#RUN jupyter nbextension enable --py --sys-prefix widgetsnbextension
+#RUN pip install sparkmagic
+#RUN pip show sparkmagic
