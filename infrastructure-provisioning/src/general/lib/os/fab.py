@@ -193,6 +193,39 @@ def configure_jupyter(os_user, jupyter_conf_file, templates_dir, jupyter_version
             print('Error:', str(err))
             sys.exit(1)
 
+def configure_docker(os_user):
+    try:
+        if not exists('/home/' + os_user + '/.ensure_dir/docker_ensured'):
+            docker_version = '18.09.4'
+            http_file = '/etc/systemd/system/docker.service.d/http-proxy.conf'
+            https_file = '/etc/systemd/system/docker.service.d/https-proxy.conf'
+            docker_conf_file = '/home/' + os_user + '/.docker/config.json'
+            sudo('curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -')
+            sudo('add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) \
+                  stable"')
+            sudo('apt-get update')
+            sudo('apt-cache policy docker-ce')
+            sudo('apt-get install -y docker-ce={}~ce-0~ubuntu'.format(docker_version))
+            sudo('mkdir -p /etc/systemd/system/docker.service.d')
+            sudo('touch {}'.format(http_file))
+            sudo('echo -e \'[Service] \nEnvironment=\"\'$http_proxy\'\"\' > {}'.format(http_file))
+            sudo('touch {}'.format(https_file))
+            sudo('echo -e \'[Service] \nEnvironment=\"\'$http_proxy\'\"\' > {}'.format(https_file))
+            sudo('mkdir /home/{}/.docker'.format(os_user))
+            sudo('touch {}'.format(docker_conf_file))
+            sudo('echo -e \'{\n "proxies":\n {\n   "default":\n   {\n     "httpProxy":"\'$http_proxy\'",\n     "httpsProxy":"\'$http_proxy\'"\n   }\n }\n}\' > {}'.format(docker_conf_file))
+            sudo('usermod -a -G docker ' + os_user)
+            sudo('update-rc.d docker defaults')
+            sudo('update-rc.d docker enable')
+            sudo('wget https://raw.githubusercontent.com/CWSpear/local-persist/master/scripts/install.sh && chmod +x install.sh')
+            sudo('sed -i "66s/curl/sudo curl/g" install.sh')
+            sudo('sed -i "s/sudo curl/sudo -E curl/g" install.sh')
+            run('sudo -E ./install.sh')
+            sudo('rm install.sh')
+            sudo('touch /home/{}/.ensure_dir/docker_ensured'.format(os_user))
+        except Exception as err:
+            print('Failed to configure Docker:', str(err))
+            sys.exit(1)
 
 def ensure_pyspark_local_kernel(os_user, pyspark_local_path_dir, templates_dir, spark_version):
     if not exists('/home/' + os_user + '/.ensure_dir/pyspark_local_kernel_ensured'):
@@ -204,7 +237,10 @@ def ensure_pyspark_local_kernel(os_user, pyspark_local_path_dir, templates_dir, 
                 "PYJ=`find /opt/spark/ -name '*py4j*.zip' | tr '\\n' ':' | sed 's|:$||g'`; sed -i 's|PY4J|'$PYJ'|g' /tmp/pyspark_local_template.json")
             sudo('sed -i "s|SP_VER|' + spark_version + '|g" /tmp/pyspark_local_template.json')
             sudo('sed -i \'/PYTHONPATH\"\:/s|\(.*\)"|\\1/home/{0}/caffe/python:/home/{0}/pytorch/build:"|\' /tmp/pyspark_local_template.json'.format(os_user))
-            sudo('\cp /tmp/pyspark_local_template.json ' + pyspark_local_path_dir + 'kernel.json')
+            if os.environ['application'] == 'jupyter-docker':
+                sudo('\cp /tmp/pyspark_local_template.json ' + pyspark_local_path_dir + 'pyspark_local_kernel.json')
+            else:
+                sudo('\cp /tmp/pyspark_local_template.json ' + pyspark_local_path_dir + 'kernel.json')
             sudo('touch /home/' + os_user + '/.ensure_dir/pyspark_local_kernel_ensured')
         except:
             sys.exit(1)
@@ -220,7 +256,10 @@ def ensure_py3spark_local_kernel(os_user, py3spark_local_path_dir, templates_dir
                 "PYJ=`find /opt/spark/ -name '*py4j*.zip' | tr '\\n' ':' | sed 's|:$||g'`; sed -i 's|PY4J|'$PYJ'|g' /tmp/py3spark_local_template.json")
             sudo('sed -i "s|SP_VER|' + spark_version + '|g" /tmp/py3spark_local_template.json')
             sudo('sed -i \'/PYTHONPATH\"\:/s|\(.*\)"|\\1/home/{0}/caffe/python:/home/{0}/pytorch/build:"|\' /tmp/py3spark_local_template.json'.format(os_user))
-            sudo('\cp /tmp/py3spark_local_template.json ' + py3spark_local_path_dir + 'kernel.json')
+            if os.environ['application'] == 'jupyter-docker':
+                sudo('\cp /tmp/py3spark_local_template.json ' + py3spark_local_path_dir + 'py3spark_local_kernel.json')
+            else:
+                sudo('\cp /tmp/py3spark_local_template.json ' + py3spark_local_path_dir + 'kernel.json')
             sudo('touch /home/' + os_user + '/.ensure_dir/py3spark_local_kernel_ensured')
         except:
             sys.exit(1)
