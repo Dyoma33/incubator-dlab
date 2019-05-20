@@ -54,7 +54,12 @@ else:
 
 pyspark_local_path_dir = '/home/' + args.os_user + '/.jupyter/kernels/pyspark_local/'
 py3spark_local_path_dir = '/home/' + args.os_user + '/.jupyter/kernels/py3spark_local/'
+<<<<<<< HEAD:infrastructure-provisioning/src/jupyter-docker/scripts/configure_jupyter_node.py
 jupyter_conf_file = '/home/' + args.os_user + '/.local/share/jupyter/jupyter_notebook_config.py'
+=======
+jupyter_conf_file = jupyter_dir + 'jupyter_notebook_config.py'
+docker_jupyter_conf = '\/home\/' + args.os_user + '\/.local\/share\/jupyter\/jupyter_notebook_config.py'
+>>>>>>> parent of 79d547e43... [DLAB-623] Demo-version:infrastructure-provisioning/src/jupyter-docker/scripts/configure_jupyter-docker_node.py
 scala_kernel_path = '/usr/local/share/jupyter/kernels/apache_toree_scala/'
 r_kernels_dir = '/home/' + args.os_user + '/.local/share/jupyter/kernels/'
 jars_dir = '/opt/jars/'
